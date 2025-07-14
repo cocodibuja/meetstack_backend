@@ -123,3 +123,15 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        # Desactiva la autenticación por sesión y fuerza el uso de tokens.
+        'core.authentication.SupabaseAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        # Por defecto, todos los endpoints requerirán un usuario autenticado.
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
