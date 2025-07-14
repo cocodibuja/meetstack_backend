@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from .models import Event, Role, UserRole
 from .serializers import EventSerializer, RoleSerializer, UserRoleSerializer
 from rest_framework.views import APIView
-from .serializers import UserRegistrationSerializer
+from .serializers import UserRegistrationSerializer,UserLoginSerializer 
 from rest_framework.permissions import AllowAny
 from rest_framework import status
 import os
@@ -92,3 +92,41 @@ class UserRegistrationView(APIView):
                 )
             # Para otros errores
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+
+class UserLoginView(APIView):
+    """
+    Vista pública para que un usuario inicie sesión y obtenga un JWT.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request, *args, **kwargs):
+        serializer = UserLoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        validated_data = serializer.validated_data
+        email = validated_data['email']
+        password = validated_data['password']
+
+        try:
+            supabase_url = os.environ.get("SUPABASE_URL")
+            supabase_key = os.environ.get("SUPABASE_KEY")
+            supabase: Client = create_client(supabase_url, supabase_key)
+
+            # Iniciar sesión en Supabase
+            auth_response = supabase.auth.sign_in_with_password({
+                "email": email,
+                "password": password
+            })
+
+            return Response({
+                "message": "Login exitoso.",
+                "access_token": auth_response.session.access_token,
+                "user_id": auth_response.user.id
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": f"Error en el login: {e}"}, status=status.HTTP_400_BAD_REQUEST)

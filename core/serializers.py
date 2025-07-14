@@ -25,3 +25,7 @@ class UserRoleSerializer(serializers.ModelSerializer):
 class UserRegistrationSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True) # write_only para que no se devuelva en la respuesta
+
+class UserLoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
