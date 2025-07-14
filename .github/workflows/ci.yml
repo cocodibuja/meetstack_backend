@@ -29,5 +29,8 @@ jobs:
           pip install -r requirements.txt
 
       # 4) ejecutar tests
+      - name: Check code style with ruff
+        run: ruff .
+
       - name: Run pytest
         run: pytest --maxfail=1 --disable-warnings -q
