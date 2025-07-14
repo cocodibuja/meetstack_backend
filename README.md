@@ -34,4 +34,4 @@ python3 -m gunicorn meetstack_backend.wsgi:application --bind 0.0.0.0:$PORT
 
 ## link a url
 
-[Health Check en Render](https://meetstack-backend.onrender.com/api/health/)
+[Health Check en Render](https://meetstack-backend.onrender.com/api/v1/health/)
