@@ -20,6 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 SECRET_KEY = os.getenv("SECRET_KEY_DJANGO", "clave-insegura-dev_default-6874c6dc-f4c4-800a")
+API_VERSION = os.getenv("API_VERSION", "v1")
 DEBUG = os.getenv("DEBUG", "False") == "True"
 
 if DEBUG:
