@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD
 
 # Se dispara en cada push o PR a main
 on:
@@ -34,3 +34,13 @@ jobs:
 
       - name: Run pytest
         run: pytest --maxfail=1 --disable-warnings -q
+  ## ahora le sumo el cd usando los secret de github
+  deploy:
+    name: 🚀 CD- Deploy to Render
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Render
+        run: |
+          echo "Calling Render deploy hook…"
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"

@@ -35,3 +35,9 @@ python3 -m gunicorn meetstack_backend.wsgi:application --bind 0.0.0.0:$PORT
 ## link a url
 
 [Health Check en Render](https://meetstack-backend.onrender.com/api/v1/health/)
+
+# Documentation
+
+- [Django Rest Framework](https://www.django-rest-framework.org/)
+- [Django](https://docs.djangoproject.com/en/4.2/)
+- [Deploy Django Render](https://render.com/docs/deploy-django)
