@@ -27,6 +27,11 @@ gunicorn meetstack_backend.wsgi:application --bind 0.0.0.0:8000
 ### Start Command
 
 ```
-gunicorn meetstack_backend.wsgi:application --bind 0.0.0.0:$PORT
-
+python3 -m gunicorn meetstack_backend.wsgi:application --bind 0.0.0.0:$PORT
 ```
+
+- el endpoint de health en render es
+
+## link a url
+
+[Health Check en Render](https://meetstack-backend.onrender.com/api/health/)
