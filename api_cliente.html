@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Django API Local Cliente</title>
+    <style>
+      :root {
+        --bg-color: #f4f4f9;
+        --text-color: #333;
+        --primary-color: #4a90e2;
+        --primary-text: #fff;
+        --border-color: #ddd;
+        --error-color: #d9534f;
+        --success-color: #5cb85c;
+        --pre-bg: #eef;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        margin: 0;
+        padding: 20px;
+        font-size: 16px;
+      }
+      .container {
+        max-width: 800px;
+        margin: auto;
+        background: #fff;
+        padding: 2em;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+      h1,
+      h2 {
+        border-bottom: 2px solid var(--border-color);
+        padding-bottom: 10px;
+        margin-top: 0;
+      }
+      .form-group {
+        margin-bottom: 1.5em;
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+      }
+      input[type="email"],
+      input[type="password"] {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+      button {
+        background-color: var(--primary-color);
+        color: var(--primary-text);
+        border: none;
+        padding: 12px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1em;
+        font-weight: bold;
+        transition: background-color 0.2s;
+      }
+      button:hover {
+        background-color: #357abd;
+      }
+      #endpoints-buttons button {
+        background-color: #6c757d;
+        margin-right: 10px;
+        margin-bottom: 10px;
+      }
+      #endpoints-buttons button:hover {
+        background-color: #5a6268;
+      }
+      #results-section,
+      #token-section {
+        margin-top: 2em;
+      }
+      pre {
+        background-color: var(--pre-bg);
+        padding: 1.5em;
+        border-radius: 4px;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        border: 1px solid var(--border-color);
+      }
+      code {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
+          Courier, monospace;
+      }
+      .hidden {
+        display: none;
+      }
+      .error {
+        color: var(--error-color);
+      }
+      .success {
+        color: var(--success-color);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Cliente de API Local</h1>
+
+      <!-- SECCIÓN DE LOGIN -->
+      <div id="login-section">
+        <h2>1. Autenticación</h2>
+        <form id="login-form">
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              value="test.user.1@example.com"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              value="una_contraseña_fuerte_123"
+              required
+            />
+          </div>
+          <button type="submit">Login & Fetch Endpoints</button>
+        </form>
+      </div>
+
+      <!-- SECCIÓN PARA MOSTRAR EL TOKEN -->
+      <div id="token-section" class="hidden">
+        <h2>JWT Obtenido</h2>
+        <pre><code id="jwt-token"></code></pre>
+      </div>
+
+      <!-- SECCIÓN DE ENDPOINTS (se rellena dinámicamente) -->
+      <div id="endpoints-section" class="hidden">
+        <h2>2. Endpoints Disponibles</h2>
+        <div id="endpoints-buttons"></div>
+      </div>
+
+      <!-- SECCIÓN DE RESULTADOS -->
+      <div id="results-section">
+        <h2>3. Respuesta de la API</h2>
+        <pre><code id="api-response">{ "message": "Esperando acción..." }</code></pre>
+      </div>
+    </div>
+
+    <script>
+      // --- CONFIGURACIÓN ---
+      const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
+      let jwtToken = null;
+
+      // --- REFERENCIAS A ELEMENTOS DEL DOM ---
+      const loginForm = document.getElementById("login-form");
+      const tokenSection = document.getElementById("token-section");
+      const jwtTokenDisplay = document.getElementById("jwt-token");
+      const endpointsSection = document.getElementById("endpoints-section");
+      const endpointsButtons = document.getElementById("endpoints-buttons");
+      const apiResponse = document.getElementById("api-response");
+
+      // --- LÓGICA PRINCIPAL ---
+
+      // 1. Manejar el envío del formulario de login
+      loginForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+
+        try {
+          // Realizar el login
+          const loginData = await performLogin(email, password);
+          jwtToken = loginData.access_token;
+
+          // Mostrar el token
+          tokenSection.classList.remove("hidden");
+          jwtTokenDisplay.textContent = jwtToken;
+
+          // Descubrir y mostrar los endpoints
+          await discoverEndpoints();
+        } catch (error) {
+          displayResult({ error: `Login fallido: ${error.message}` }, true);
+        }
+      });
+
+      // 2. Función para hacer login
+      async function performLogin(email, password) {
+        displayResult({ message: "Iniciando sesión..." });
+        const response = await fetch(`${API_BASE_URL}/auth/login/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            JSON.stringify(
+              errorData.error || errorData.detail || "Error desconocido"
+            )
+          );
+        }
+        return await response.json();
+      }
+
+      // 3. Función para descubrir endpoints de la raíz de la API
+      async function discoverEndpoints() {
+        if (!jwtToken) return;
+        displayResult({ message: "Descubriendo endpoints..." });
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/`, {
+            headers: { Authorization: `Bearer ${jwtToken}` },
+          });
+
+          if (!response.ok)
+            throw new Error("No se pudo obtener la lista de endpoints.");
+
+          const endpoints = await response.json();
+          endpointsButtons.innerHTML = ""; // Limpiar botones anteriores
+
+          for (const name in endpoints) {
+            const button = document.createElement("button");
+            button.textContent = `GET /${name}/`;
+            button.onclick = () => fetchData(endpoints[name]);
+            endpointsButtons.appendChild(button);
+          }
+
+          endpointsSection.classList.remove("hidden");
+          displayResult({ success: "Endpoints cargados. ¡Listo para probar!" });
+        } catch (error) {
+          displayResult({ error: error.message }, true);
+        }
+      }
+
+      // 4. Función para obtener datos de un endpoint específico
+      async function fetchData(endpointUrl) {
+        if (!jwtToken) return;
+        displayResult({ message: `Consultando ${endpointUrl}...` });
+
+        try {
+          const response = await fetch(endpointUrl, {
+            headers: { Authorization: `Bearer ${jwtToken}` },
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Error ${response.status}: ${errorText}`);
+          }
+          const data = await response.json();
+          displayResult(data);
+        } catch (error) {
+          displayResult({ error: error.message }, true);
+        }
+      }
+
+      // 5. Función de utilidad para mostrar resultados
+      function displayResult(data, isError = false) {
+        apiResponse.textContent = JSON.stringify(data, null, 2);
+        apiResponse.className = isError ? "error" : "success";
+      }
+    </script>
+  </body>
+</html>
