@@ -17,3 +17,16 @@ python manage.py startapp core
 act push -P ubuntu-latest=nektos/act-environments-ubuntu:18.04 --container-architecture linux/amd64
 
 ```
+
+```bash
+gunicorn meetstack_backend.wsgi:application --bind 0.0.0.0:8000
+```
+
+## Render Manual Deployment
+
+### Start Command
+
+```
+gunicorn meetstack_backend.wsgi:application --bind 0.0.0.0:$PORT
+
+```
