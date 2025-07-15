@@ -11,7 +11,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-
+    env:
+      DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
     steps:
       # 1) bajar el código
       - uses: actions/checkout@v4
@@ -28,7 +29,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 4) ejecutar tests
+      - name: Run migrations
+        run: python manage.py migrate --noinput
+
       - name: Check code style with ruff
         run: ruff check .
 
@@ -39,7 +42,15 @@ jobs:
     name: 🚀 CD- Deploy to Render
     needs: test
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+      RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+
       - name: Deploy to Render
         run: |
           echo "Calling Render deploy hook…"
