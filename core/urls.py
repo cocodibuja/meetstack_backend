@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import UserLoginView, health_check, EventViewSet,RoleViewSet,UserRoleViewSet,UserRegistrationView
+from .views import HealthCheckView, UserLoginView, EventViewSet,RoleViewSet,UserRoleViewSet,UserRegistrationView
 
 app_name = "core"
 
@@ -10,7 +10,7 @@ router.register(r"roles", RoleViewSet, basename="role")
 router.register(r"user-roles", UserRoleViewSet, basename="userrole")
 
 
-urlpatterns = [path("health/", health_check,name="health-check"),
+urlpatterns = [path("health/",      HealthCheckView.as_view(),    name="health-check"),
                path("auth/register/", UserRegistrationView.as_view(), name="user-register"),
                path("auth/login/", UserLoginView.as_view(), name="user-login"),
                path("", include(router.urls))]

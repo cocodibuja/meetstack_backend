@@ -12,9 +12,12 @@ from supabase import create_client, Client
 from django.contrib.auth.models import User
 
 
-@api_view(["GET"])
-def health_check(_):
-    return Response({"status": "ok"})
+class HealthCheckView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []  
+
+    def get(self, request, *args, **kwargs):
+        return Response({"status": "ok"})
 
 class EventViewSet(viewsets.ModelViewSet):
     queryset = Event.objects.all()
@@ -34,8 +37,8 @@ class UserRegistrationView(APIView):
     """
     Vista pública para registrar un nuevo usuario en Supabase y Django.
     """
-    permission_classes = [AllowAny]  # <-- Esto hace que la vista sea pública
-    authentication_classes = []      # <-- Sin autenticación para este endpoint
+    permission_classes = [AllowAny]  
+    authentication_classes = []      
 
     def post(self, request, *args, **kwargs):
         serializer = UserRegistrationSerializer(data=request.data)
