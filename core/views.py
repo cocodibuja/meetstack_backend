@@ -1,103 +1,128 @@
-from rest_framework.decorators import api_view
-from rest_framework import viewsets
-from rest_framework.response import Response
-from .models import Event, Role, UserRole
-from .serializers import EventSerializer, RoleSerializer, UserRoleSerializer
-from rest_framework.views import APIView
-from .serializers import UserRegistrationSerializer,UserLoginSerializer 
-from rest_framework.permissions import AllowAny
-from rest_framework import status
 import os
-from supabase import create_client, Client
-from django.contrib.auth.models import User
+from datetime import date
 
+from django.db import transaction
+from rest_framework import status, viewsets
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from supabase import create_client, Client
+
+from users.models import UserProfile
+from subscriptions.models import Plan, UserSubscription, DailyFreeQuota
+from .models import Event, EventRoleMembership
+from .serializers import (
+    EventSerializer,
+    EventRoleMembershipSerializer,
+    UserRegistrationSerializer,
+    UserLoginSerializer
+)
 
 @api_view(["GET"])
+@permission_classes([AllowAny])
+@api_view(["GET"])
 def health_check(_):
+    """Una simple comprobación para ver si el servicio está en línea."""
     return Response({"status": "ok"})
 
 class EventViewSet(viewsets.ModelViewSet):
+    """
+    Gestiona los eventos.
+    TODO: Implementar permisos para que solo el propietario o staff pueda editar.
+    """
     queryset = Event.objects.all()
     serializer_class = EventSerializer
 
-
-class RoleViewSet(viewsets.ModelViewSet):
-    queryset = Role.objects.all()
-    serializer_class = RoleSerializer
-
-
-class UserRoleViewSet(viewsets.ModelViewSet):
-    queryset = UserRole.objects.all()
-    serializer_class = UserRoleSerializer
+class EventRoleMembershipViewSet(viewsets.ModelViewSet):
+    """
+    Gestiona los roles de los usuarios dentro de los eventos.
+    TODO: Implementar permisos para que solo el propietario del evento pueda asignar roles.
+    """
+    queryset = EventRoleMembership.objects.all()
+    serializer_class = EventRoleMembershipSerializer
 
 class UserRegistrationView(APIView):
     """
-    Vista pública para registrar un nuevo usuario en Supabase y Django.
+    Vista pública para registrar un nuevo usuario en Supabase
+    y crear su perfil y suscripción gratuita en nuestra base de datos.
     """
-    permission_classes = [AllowAny]  # <-- Esto hace que la vista sea pública
-    authentication_classes = []      # <-- Sin autenticación para este endpoint
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
+    @transaction.atomic # Si cualquier paso falla, se deshacen todos los cambios en la BD.
     def post(self, request, *args, **kwargs):
         serializer = UserRegistrationSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        validated_data = serializer.validated_data
-        email = validated_data['email']
-        password = validated_data['password']
+        email = serializer.validated_data['email']
+        password = serializer.validated_data['password']
+
+        # 1. Verificar la cuota diaria de registros gratuitos.
+        # TODO: Hacer el límite de 40 configurable en settings.py o en un modelo.
+        quota, _ = DailyFreeQuota.objects.get_or_create(date=date.today())
+        if quota.registrations_count >= 40:
+            return Response(
+                {"error": "La cuota de registros para hoy ha sido alcanzada."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
 
         try:
-            # 1. Conectar con Supabase usando la clave pública (anon key)
+            # 2. Registrar el usuario en el servicio de autenticación de Supabase.
             supabase_url = os.environ.get("SUPABASE_URL")
             supabase_key = os.environ.get("SUPABASE_KEY")
             supabase: Client = create_client(supabase_url, supabase_key)
+            auth_response = supabase.auth.sign_up({"email": email, "password": password})
 
-            # 2. Intentar registrar el usuario en Supabase Auth
-            auth_response = supabase.auth.sign_up({
-                "email": email,
-                "password": password,
-            })
-
-            # Si el usuario ya existe, Supabase puede devolver un usuario sin sesión
             if not auth_response.user or not auth_response.session:
-                 # Esta condición puede variar según la versión de la librería,
-                 # pero la idea es detectar un registro fallido.
-                 # El error específico de "usuario ya existe" se captura abajo.
-                 raise Exception("El usuario podría ya existir o hubo un error en Supabase.")
+                raise Exception("El usuario podría ya existir o hubo un error en Supabase.")
 
-            # 3. Si el registro en Supabase es exitoso, crea el usuario en Django
             supabase_user_id = auth_response.user.id
-            
-            # Usamos el ID de Supabase como 'username' para que sea único y fácil de vincular.
-            user = User.objects.create_user(
-                username=supabase_user_id,
+
+            # 3. Crear el perfil local (UserProfile) en nuestra base de datos.
+            # Esta es la "sombra" del usuario de Supabase.
+            profile = UserProfile.objects.create(
+                id_supabase=supabase_user_id,
                 email=email
             )
-            user.set_unusable_password() # No almacenamos la contraseña en Django
-            user.save()
 
-            # Devolvemos el token para que el frontend pueda iniciar sesión automáticamente
+            # 4. Asignar el plan "free" por defecto al nuevo perfil.
+            # Este paso asume que has creado un Plan con name='free' en el admin.
+            free_plan = Plan.objects.get(name='free')
+            UserSubscription.objects.create(user=profile, plan=free_plan)
+
+            # 5. Incrementar la cuota de registros de hoy.
+            quota.registrations_count += 1
+            quota.save()
+
+            # 6. Devolver una respuesta exitosa con el token para auto-login.
             return Response({
-                "message": "Usuario registrado exitosamente. Por favor, verifica tu email.",
-                "user_id": supabase_user_id,
+                "message": "Usuario registrado exitosamente y asignado al plan gratuito.",
+                "profile_id": str(profile.id_supabase),
                 "access_token": auth_response.session.access_token,
             }, status=status.HTTP_201_CREATED)
 
+        except Plan.DoesNotExist:
+            # Error crítico de configuración si el plan 'free' no existe.
+            return Response(
+                {"error": "Error de configuración del servidor: El plan 'free' no fue encontrado."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         except Exception as e:
-            # Captura el error específico si el usuario ya existe
+            # Manejar errores comunes como "usuario ya existe".
             if 'User already registered' in str(e):
                 return Response(
                     {"error": "Un usuario con este email ya existe."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            # Para otros errores
+            # Devolver cualquier otro error inesperado.
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
-
 
 class UserLoginView(APIView):
     """
-    Vista pública para que un usuario inicie sesión y obtenga un JWT.
+    Vista pública para que un usuario inicie sesión.
+    Esta vista solo interactúa con Supabase Auth y no toca nuestra base de datos.
     """
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -106,17 +131,16 @@ class UserLoginView(APIView):
         serializer = UserLoginSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        validated_data = serializer.validated_data
-        email = validated_data['email']
-        password = validated_data['password']
+            
+        email = serializer.validated_data['email']
+        password = serializer.validated_data['password']
 
         try:
             supabase_url = os.environ.get("SUPABASE_URL")
             supabase_key = os.environ.get("SUPABASE_KEY")
             supabase: Client = create_client(supabase_url, supabase_key)
 
-            # Iniciar sesión en Supabase
+            # Iniciar sesión en Supabase para obtener el JWT.
             auth_response = supabase.auth.sign_in_with_password({
                 "email": email,
                 "password": password
@@ -127,6 +151,5 @@ class UserLoginView(APIView):
                 "access_token": auth_response.session.access_token,
                 "user_id": auth_response.user.id
             }, status=status.HTTP_200_OK)
-
         except Exception as e:
             return Response({"error": f"Error en el login: {e}"}, status=status.HTTP_400_BAD_REQUEST)

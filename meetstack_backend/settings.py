@@ -43,6 +43,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'core',  
+    'users',  # Nueva app para usuarios
+    'subscriptions',  # Nueva app para suscripciones
 ]
 
 MIDDLEWARE = [
