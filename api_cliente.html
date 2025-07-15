@@ -1,0 +1,335 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Django API Local Cliente</title>
+    <style>
+      :root {
+        --bg-color: #f4f4f9;
+        --text-color: #333;
+        --primary-color: #4a90e2;
+        --primary-text: #fff;
+        --border-color: #ddd;
+        --error-color: #d9534f;
+        --success-color: #5cb85c;
+        --pre-bg: #eef;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        margin: 0;
+        padding: 20px;
+        font-size: 16px;
+      }
+      .container {
+        max-width: 800px;
+        margin: auto;
+        background: #fff;
+        padding: 2em;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+      h1,
+      h2 {
+        border-bottom: 2px solid var(--border-color);
+        padding-bottom: 10px;
+        margin-top: 0;
+      }
+      .form-group {
+        margin-bottom: 1.5em;
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+      }
+      input[type="email"],
+      input[type="password"],
+      input[type="text"] {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+      button {
+        background-color: var(--primary-color);
+        color: var(--primary-text);
+        border: none;
+        padding: 12px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1em;
+        font-weight: bold;
+        transition: background-color 0.2s;
+      }
+      button:hover {
+        background-color: #357abd;
+      }
+      #endpoints-buttons button {
+        background-color: #6c757d;
+        margin-right: 10px;
+        margin-bottom: 10px;
+      }
+      #endpoints-buttons button:hover {
+        background-color: #5a6268;
+      }
+      .hidden {
+        display: none;
+      }
+      .error {
+        color: var(--error-color);
+      }
+      .success {
+        color: var(--success-color);
+      }
+      pre {
+        background-color: var(--pre-bg);
+        padding: 1.5em;
+        border-radius: 4px;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        border: 1px solid var(--border-color);
+      }
+      code {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
+          Courier, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Cliente de API Local</h1>
+
+      <!-- 1. Autenticación -->
+      <div id="login-section">
+        <h2>1. Autenticación</h2>
+        <form id="login-form">
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              value="test.user.1@example.com"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              value="una_contraseña_fuerte_123"
+              required
+            />
+          </div>
+          <button type="submit">Login & Fetch Endpoints</button>
+        </form>
+      </div>
+
+      <!-- 2. Mostrar JWT -->
+      <div id="token-section" class="hidden">
+        <h2>2. JWT Obtenido</h2>
+        <pre><code id="jwt-token"></code></pre>
+      </div>
+
+      <!-- 3. Endpoints Disponibles -->
+      <div id="endpoints-section" class="hidden">
+        <h2>3. Endpoints Disponibles</h2>
+        <div id="endpoints-buttons"></div>
+      </div>
+
+      <!-- 4. Crear Evento -->
+      <div id="create-section" class="hidden">
+        <h2>4. Crear un Nuevo Evento</h2>
+        <div class="form-group">
+          <label for="event-name">Nombre del Evento</label>
+          <input
+            type="text"
+            id="event-name"
+            placeholder="Ej: Mi Primer Evento"
+          />
+        </div>
+        <button id="create-button">Crear Evento</button>
+      </div>
+
+      <!-- 5. Inscribirse en un Evento -->
+      <div id="join-section" class="hidden">
+        <h2>5. Inscribirse en un Evento</h2>
+        <div class="form-group">
+          <label for="event-id">Event UUID</label>
+          <input
+            type="text"
+            id="event-id"
+            placeholder="ej: 123e4567-e89b-12d3-a456-426614174000"
+          />
+        </div>
+        <button id="join-button">Unirse al Evento</button>
+      </div>
+
+      <!-- 6. Respuesta de la API -->
+      <div id="results-section">
+        <h2>6. Respuesta de la API</h2>
+        <pre><code id="api-response">{ "message": "Esperando acción..." }</code></pre>
+      </div>
+    </div>
+
+    <script>
+      const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
+      let jwtToken = null;
+
+      const loginForm = document.getElementById("login-form");
+      const tokenSection = document.getElementById("token-section");
+      const jwtTokenDisplay = document.getElementById("jwt-token");
+      const endpointsSection = document.getElementById("endpoints-section");
+      const endpointsButtons = document.getElementById("endpoints-buttons");
+      const createSection = document.getElementById("create-section");
+      const joinSection = document.getElementById("join-section");
+      const apiResponse = document.getElementById("api-response");
+
+      // 1. Login
+      loginForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+        try {
+          const loginData = await performLogin(email, password);
+          jwtToken = loginData.access_token;
+          tokenSection.classList.remove("hidden");
+          jwtTokenDisplay.textContent = jwtToken;
+          await discoverEndpoints();
+          showCreateSection();
+          showJoinSection();
+        } catch (err) {
+          displayResult({ error: `Login fallido: ${err.message}` }, true);
+        }
+      });
+
+      // 2. performLogin
+      async function performLogin(email, password) {
+        displayResult({ message: "Iniciando sesión..." });
+        const res = await fetch(`${API_BASE_URL}/auth/login/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || err.detail || "Error desconocido");
+        }
+        return res.json();
+      }
+
+      // 3. discoverEndpoints
+      async function discoverEndpoints() {
+        displayResult({ message: "Descubriendo endpoints..." });
+        const res = await fetch(`${API_BASE_URL}/`, {
+          headers: { Authorization: `Bearer ${jwtToken}` },
+        });
+        if (!res.ok) throw new Error("No se pudo listar endpoints");
+        const eps = await res.json();
+        endpointsButtons.innerHTML = "";
+        for (const name in eps) {
+          const btn = document.createElement("button");
+          btn.textContent = `GET /${name}/`;
+          btn.onclick = () => fetchData(eps[name]);
+          endpointsButtons.appendChild(btn);
+        }
+        endpointsSection.classList.remove("hidden");
+        displayResult({ success: "Endpoints cargados." });
+      }
+
+      // 4. showCreateSection
+      function showCreateSection() {
+        createSection.classList.remove("hidden");
+        document
+          .getElementById("create-button")
+          .addEventListener("click", async () => {
+            const name = document.getElementById("event-name").value.trim();
+            if (!name)
+              return displayResult({ error: "Ingresa un nombre" }, true);
+            await performCreate(name);
+          });
+      }
+
+      // 5. performCreate
+      async function performCreate(name) {
+        displayResult({ message: `Creando evento "${name}"…` });
+        try {
+          const res = await fetch(`${API_BASE_URL}/events/`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${jwtToken}`,
+            },
+            body: JSON.stringify({ name }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+          displayResult({ success: `Evento creado con ID ${data.id}` });
+        } catch (err) {
+          displayResult({ error: err.message }, true);
+        }
+      }
+
+      // 6. showJoinSection
+      function showJoinSection() {
+        joinSection.classList.remove("hidden");
+        document
+          .getElementById("join-button")
+          .addEventListener("click", async () => {
+            const id = document.getElementById("event-id").value.trim();
+            if (!id) return displayResult({ error: "Ingresa UUID" }, true);
+            await performJoin(id);
+          });
+      }
+
+      // 7. performJoin
+      async function performJoin(eventId) {
+        displayResult({ message: `Inscribiendo al evento ${eventId}…` });
+        try {
+          const res = await fetch(`${API_BASE_URL}/events/${eventId}/join/`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${jwtToken}`,
+            },
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+          displayResult(data);
+        } catch (err) {
+          displayResult({ error: err.message }, true);
+        }
+      }
+
+      // 8. fetchData (GET)
+      async function fetchData(url) {
+        displayResult({ message: `Consultando ${url}…` });
+        try {
+          const res = await fetch(url, {
+            headers: { Authorization: `Bearer ${jwtToken}` },
+          });
+          if (!res.ok) throw new Error(`Error ${res.status}`);
+          const data = await res.json();
+          displayResult(data);
+        } catch (err) {
+          displayResult({ error: err.message }, true);
+        }
+      }
+
+      // 9. displayResult
+      function displayResult(data, isError = false) {
+        apiResponse.textContent = JSON.stringify(data, null, 2);
+        apiResponse.className = isError ? "error" : "success";
+      }
+    </script>
+  </body>
+</html>
+```
